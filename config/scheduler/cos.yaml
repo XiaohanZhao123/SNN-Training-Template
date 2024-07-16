@@ -1,0 +1,4 @@
+name: CosineAnnealingLR
+
+params:
+  T_max: ${trainer.max_epochs}

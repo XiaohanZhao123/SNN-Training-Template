@@ -1,0 +1,4 @@
+name: sew_resnet18
+path: ./resources/models/resnet
+cnf: ADD
+zero_init_residual: True

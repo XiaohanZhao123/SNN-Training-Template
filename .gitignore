@@ -1,0 +1,17 @@
+resources/datasets
+resources/models
+
+**/__pycache__
+
+test*
+
+*.out
+wandb/
+outputs/
+first.out
+second.out
+snn_model_design
+
+*.ipynb
+
+.vscode/

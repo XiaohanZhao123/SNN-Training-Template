@@ -1,0 +1,33 @@
+defaults:
+ - dataset: cifar10
+ - model: sew_fpn
+ - optimizer: sgd
+ - scheduler: cos
+
+
+data:
+  batch_size: 128
+  num_workers: 8
+  has_test: True
+  auto_argu: True
+  cutout: True
+
+trainer:
+   devices: [0]
+   max_epochs: 400
+   precision: '16-mixed'
+
+wandb:
+  entity: ritianzhaoxx
+  run_name: test
+
+T: 4
+p: 4 # parameter for temporal inflation neuron
+replace_activation: False
+loss: cross_entropy
+inflation_type: add # can use [binary, conv, add]
+
+
+
+compile: False # if use torch.compile for accleration
+to_pytorch: True # if convert to pytorch model
