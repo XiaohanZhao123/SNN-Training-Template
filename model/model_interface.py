@@ -8,7 +8,7 @@ from pytorch_lightning import LightningModule
 from spikingjelly.activation_based import functional
 from torch import nn, optim
 from torch.optim import lr_scheduler
-from torchmetrics.classification.accuracy import Accuracy
+from torchmetrics.classification.accuracy import MulticlassAccuracy
 
 
 class ModuleInterface(LightningModule):
@@ -40,15 +40,19 @@ class ModuleInterface(LightningModule):
         else:
             self.model = model
 
-        self.loss_fn = loss
+        if loss is not None:
+            self.loss_fn = loss
+        else:
+            self.loss_fn = nn.CrossEntropyLoss()
+            
         self.optimizer_kwargs = config.optimizer
         self.scheduler_kwargs = config.scheduler
         self._train_transforms = train_transforms
         self._val_transforms = val_transforms
-        self.train_acc = Accuracy(
+        self.train_acc = MulticlassAccuracy(
             task="multiclass", num_classes=config.dataset.num_classes, average="macro"
         )
-        self.val_acc = Accuracy(
+        self.val_acc = MulticlassAccuracy(
             task="multiclass", num_classes=config.dataset.num_classes, average="macro"
         )
         
@@ -62,9 +66,9 @@ class ModuleInterface(LightningModule):
         Returns:
             The output tensor.
         """
-        functional.reset_net(self)
+        functional.reset_net(self.model)
         output = self.model(x)
-        return output
+        return output.mean(0)
 
     def training_step(
         self,

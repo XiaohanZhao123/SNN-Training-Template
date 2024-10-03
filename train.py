@@ -12,12 +12,13 @@ from pytorch_lightning import callbacks as plc
 from pytorch_lightning import seed_everything
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 
-from data import DataInterface
-from instantiate import get_augmentation, get_dataset, get_model
 from model import ModuleInterface
+from utils.data_interface import DataInterface
+from utils.instantiate import get_augmentation, get_model
 
 os.environ["WANDB_MODE"] = "disabled"
 wandb.require("core")
+torch.set_float32_matmul_precision('medium')
 
 
 def load_callbacks(cfg: DictConfig):
@@ -60,7 +61,7 @@ def main(cfg: DictConfig) -> None:
             name=cfg.wandb.run_name,
         )
 
-    model_kwargs = deepcopy(cfg.model)
+    model_kwargs = deepcopy(config_dict["model"])
     del model_kwargs["name"]
     model = get_model(
         model_name=cfg.model.name,

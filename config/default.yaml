@@ -8,7 +8,7 @@ defaults:
 scheduler:
   name: CosineAnnealingLR
   params:
-    T_max: ${trainer.max_epochs}
+    T_max: ${max_epochs}
 
 # Data loading configuration
 data_loader:
@@ -30,8 +30,8 @@ T: 4  # Number of time steps for SNN
 loss: cross_entropy
 
 # Optimization configuration
-compile: True  # Use torch.compile for acceleration
-to_pytorch: True  # Convert to PyTorch model
+compile: False  # Use torch.compile for acceleration
+to_pytorch: False  # Convert to PyTorch model
 
 # Reproducibility
 seed: 42

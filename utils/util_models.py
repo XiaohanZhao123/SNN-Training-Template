@@ -74,34 +74,34 @@ class CostumeLIF(nn.Module):
         return torch.stack(spike_outs)
 
 
-class SpikeConv(nn.Module):
+class TemporalLinearWrapper(nn.Module):
 
-    def __init__(self, conv, step=2):
-        super(SpikeConv, self).__init__()
-        self.conv = conv
+    def __init__(self, model, step=2):
+        super(TemporalLinearWrapper, self).__init__()
+        self.model = model
         self.step = step
         self.step_mode = "m"
 
     def forward(self, x):
         out = []
         for i in range(self.step):
-            out += [self.conv(x[i])]
+            out += [self.model(x[i])]
         out = torch.stack(out)
         return out
 
 
-class SpikePool(nn.Module):
+class TemporalConvWrapper(nn.Module):
 
-    def __init__(self, pool, step=2):
+    def __init__(self, model, step=2):
         super().__init__()
-        self.pool = pool
+        self.model = model
         self.step = step
         self.step_mode = "m"
 
     def forward(self, x):
         T, B, C, H, W = x.shape
         out = x.reshape(-1, C, H, W)
-        out = self.pool(out)
+        out = self.model(out)
         B_o, C_o, H_o, W_o = out.shape
         out = out.view(T, B, C_o, H_o, W_o).contiguous()
         return out

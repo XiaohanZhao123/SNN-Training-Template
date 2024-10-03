@@ -1,3 +1,3 @@
-name: sew_resnet18
+name: sew_resnet
 cnf: ADD
 zero_init_residual: True

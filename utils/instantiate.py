@@ -18,10 +18,10 @@ from torch.utils.data import Dataset, random_split
 from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100, MNIST
 
-from data.kornia_augmentation import (get_neuromorphic_dataset_augmentation,
+from .kornia_augmentation import (get_neuromorphic_dataset_augmentation,
                                       get_vision_dataset_augmentation)
-from data.lmdb import LMDBDataset
-from model.convert import ann_to_snn
+from .lmdb import LMDBDataset
+from utils.convert import ann_to_snn
 
 MODEL_DICT = {
     "sew_resnet": sew_resnet.sew_resnet34,

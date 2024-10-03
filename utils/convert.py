@@ -6,7 +6,7 @@ from spikingjelly.activation_based.model import sew_resnet
 from spikingjelly.activation_based.neuron import SimpleLIFNode
 from torch import nn
 
-from .util_models import CostumeLIF, SpikeConv, SpikePool
+from .util_models import CostumeLIF, TemporalConvWrapper, TemporalLinearWrapper
 
 
 def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
@@ -21,13 +21,13 @@ def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
         elif isinstance(child_module, (nn.Conv2d, layer.Conv2d)):
             if isinstance(child_module, layer.Conv2d):
                 child_module = spikingjelly_to_ann(child_module, nn.Conv2d)
-            setattr(module, name, SpikePool(child_module, step=step))
+            setattr(module, name, TemporalConvWrapper(child_module, step=step))
 
         elif isinstance(child_module, (nn.Linear, layer.Linear)):
             if isinstance(child_module, layer.Linear):
                 child_module = spikingjelly_to_ann(child_module, nn.Linear)
 
-            setattr(module, name, SpikeConv(child_module, step=step))
+            setattr(module, name, TemporalConvWrapper(child_module, step=step))
 
         elif isinstance(
             child_module,
@@ -47,7 +47,7 @@ def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
             if isinstance(child_module, layer.MaxPool2d):
                 child_module = spikingjelly_to_ann(child_module, nn.MaxPool2d)
 
-            setattr(module, name, SpikePool(child_module, step=step))
+            setattr(module, name, TemporalConvWrapper(child_module, step=step))
 
         elif isinstance(
             child_module, (nn.ReLU, nn.ReLU6, neuron.LIFNode, neuron.IFNode)
@@ -56,7 +56,7 @@ def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
         elif isinstance(child_module, (nn.BatchNorm2d, layer.BatchNorm2d)):
             if isinstance(child_module, layer.BatchNorm2d):
                 child_module = spikingjelly_to_ann(child_module, nn.BatchNorm2d)
-            setattr(module, name, SpikePool(child_module, step=step))
+            setattr(module, name, TemporalConvWrapper(child_module, step=step))
             channel = child_module.num_features
 
         else:

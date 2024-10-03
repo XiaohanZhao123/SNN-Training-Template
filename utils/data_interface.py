@@ -3,7 +3,7 @@ from typing import Optional
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 
-from ..instantiate import CONFIG, get_dataset
+from .instantiate import CONFIG, get_dataset
 
 
 class DataInterface(LightningDataModule):
