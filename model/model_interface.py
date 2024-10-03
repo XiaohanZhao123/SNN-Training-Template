@@ -32,6 +32,9 @@ class ModuleInterface(LightningModule):
         val_transforms: Union[ImageSequential, VideoSequential] = None,
     ) -> None:
         super().__init__()
+        assert config is not None, "config is required"
+        assert config.compile is not None, "config for compile is required"
+        
         if config.compile is True:
             self.model = torch.compile(model, mode="reduce-overhead")
         else:

@@ -8,7 +8,7 @@ from einops.layers.torch import Rearrange
 from kornia import augmentation
 from torch import nn
 
-from .auto_augument import POLICY, AutoArgumentation
+from .auto_augmentation import POLICY, AutoArgumentation
 
 
 def get_vision_dataset_augmentation(
