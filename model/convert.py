@@ -3,7 +3,9 @@ import inspect
 import torch
 from spikingjelly.activation_based import layer, neuron
 from spikingjelly.activation_based.model import sew_resnet
+from spikingjelly.activation_based.neuron import SimpleLIFNode
 from torch import nn
+
 from .util_models import CostumeLIF, SpikeConv, SpikePool
 
 
@@ -51,7 +53,6 @@ def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
             child_module, (nn.ReLU, nn.ReLU6, neuron.LIFNode, neuron.IFNode)
         ):
             setattr(module, name, CostumeLIF())
-
         elif isinstance(child_module, (nn.BatchNorm2d, layer.BatchNorm2d)):
             if isinstance(child_module, layer.BatchNorm2d):
                 child_module = spikingjelly_to_ann(child_module, nn.BatchNorm2d)

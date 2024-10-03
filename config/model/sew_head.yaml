@@ -1,4 +1,0 @@
-name: sew_head
-path: ./resources/models/sew_head
-cnf: ADD
-zero_init_residual: True

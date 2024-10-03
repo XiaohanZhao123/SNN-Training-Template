@@ -1,20 +1,23 @@
 import os
+from copy import deepcopy
+from pathlib import Path
 
-os.environ["WANDB_MODE"] = "disabled"
-import wandb
-
-wandb.require("core")
 import hydra
 import pytorch_lightning as pl
 import torch
+import wandb
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning import callbacks as plc
-from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning import seed_everything
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 
 from data import DataInterface
+from instantiate import get_augmentation, get_dataset, get_model
 from model import ModuleInterface
-from utils import get_dataset, get_loss, get_model
+
+os.environ["WANDB_MODE"] = "disabled"
+wandb.require("core")
 
 
 def load_callbacks(cfg: DictConfig):
@@ -40,55 +43,57 @@ def load_callbacks(cfg: DictConfig):
 @hydra.main(config_path="config", config_name="default", version_base=None)
 def main(cfg: DictConfig) -> None:
     config_dict = OmegaConf.to_container(cfg, resolve=True)
-    logger = WandbLogger(
-        config=config_dict,
-        project="snn_model_design",
-        entity=cfg.wandb.entity,
-        name=cfg.wandb.run_name,
-    )
-    model = get_model(cfg)
-    dataset_cls, dataset_kwargs = get_dataset(cfg)
-    loss = get_loss(cfg)
-    model = ModuleInterface(
-        model,
-        path=cfg.model.path,
-        loss=loss,
-        optimizer_kwargs=cfg.optimizer,
-        scheduler_kwargs=cfg.scheduler,
-        T=cfg.T,
-        compile=cfg.compile,
-    )
-    dataset = DataInterface(
-        dataset_cls=dataset_cls,
-        dataset_kwargs=dataset_kwargs,
-        batch_size=cfg.data.batch_size,
-        num_workers=cfg.data.num_workers,
-        has_test=cfg.data.has_test,
-    )
+    seed_everything(cfg.seed)
+    if cfg.use_wandb:
+        logger = WandbLogger(
+            config=config_dict,
+            project="snn_model_design",
+            entity=cfg.wandb.entity,
+            name=cfg.wandb.run_name,
+        )
+    else:
+        # create dir if not exists
+        if not Path(f"./logs/{cfg.model.name}_{cfg.dataset.name}").exists():
+            Path(f"./logs/{cfg.model.name}_{cfg.dataset.name}").mkdir(parents=True)
+        logger = TensorBoardLogger(
+            save_dir=f"./logs/{cfg.model.name}_{cfg.dataset.name}",
+            name=cfg.wandb.run_name,
+        )
 
-    print(model)
-    print(dataset_cls, dataset_kwargs)
+    model_kwargs = deepcopy(cfg.model)
+    del model_kwargs["name"]
+    model = get_model(
+        model_name=cfg.model.name,
+        num_classes=cfg.dataset.num_classes,
+        to_pytorch=cfg.to_pytorch,
+        T=cfg.T,
+        **model_kwargs,
+    )
+    datamodule = DataInterface(config=config_dict)
+    train_transforms, val_transforms = get_augmentation(
+        dataset_name=cfg.dataset.name,
+        img_size=cfg.dataset.img_size,
+        mean=cfg.dataset.mean,
+        std=cfg.dataset.std,
+        autoaugment=cfg.autoaugment,
+    )
+    module = ModuleInterface(
+        model=model,
+        config=cfg,
+        train_transforms=train_transforms,
+        val_transforms=val_transforms,
+    )
 
     trainer = Trainer(
         logger=logger,
         callbacks=load_callbacks(cfg),
-        **cfg.trainer,
+        max_epochs=cfg.max_epochs,
+        devices=cfg.devices,
+        precision=cfg.precision,
+        num_sanity_val_steps=0 if not cfg.debug else 1,
     )
-    # model = torch.compile(model)
-    trainer.fit(model, dataset)
+    trainer.fit(module, datamodule)
 
 
 if __name__ == "__main__":
     main()
-
-
-"""cli
-
-nohup python train.py data.auto_argu=True data.cutout=False replace_bn=False clamp_activation=False trainer.devices=[1] wandb.run_name=with_auto_argu >with_auto_argu.out &
-
-nohup python train.py data.auto_argu=False data.cutout=False replace_bn=False clamp_activation=False trainer.devices=[0] wandb.run_name=baseline >baseline.out &
-
-nohup python train.py data.auto_argu=True data.cutout=True replace_bn=False clamp_activation=False trainer.devices=[2] wandb.run_name=with_full_argu >with_full_argu.out &
-
-nohup python train.py data.auto_argu=True data.cutout=True replace_bn=True clamp_activation=True trainer.devices=[3] wandb.run_name=full >full.out &
-"""

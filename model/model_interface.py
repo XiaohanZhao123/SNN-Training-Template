@@ -1,11 +1,14 @@
-from typing import Mapping
+from typing import Mapping, Optional, Union
 
 import pytorch_lightning as pl
 import torch
+from kornia.augmentation import ImageSequential, VideoSequential
+from omegaconf import DictConfig
 from pytorch_lightning import LightningModule
 from spikingjelly.activation_based import functional
 from torch import nn, optim
 from torch.optim import lr_scheduler
+from torchmetrics.classification.accuracy import Accuracy
 
 
 class ModuleInterface(LightningModule):
@@ -23,28 +26,29 @@ class ModuleInterface(LightningModule):
     def __init__(
         self,
         model: nn.Module,
-        path: str,
-        loss: Mapping,
-        optimizer_kwargs: dict,
-        scheduler_kwargs: dict,
-        T: int,
-        compile: bool = False,
+        loss: Optional[Mapping] = None,
+        config: Optional[DictConfig] = None,
+        train_transforms: Union[ImageSequential, VideoSequential] = None,
+        val_transforms: Union[ImageSequential, VideoSequential] = None,
     ) -> None:
         super().__init__()
-        if compile is True:
-            self.model = torch.compile(model, mode="reduce-overhead", dynamic=True)
+        if config.compile is True:
+            self.model = torch.compile(model, mode="reduce-overhead")
         else:
             self.model = model
 
-        self.path = path
         self.loss_fn = loss
-        self.optimizer_kwargs = optimizer_kwargs
-        self.scheduler_kwargs = scheduler_kwargs
-        self.T = T
-
-    def load_model(self):
-        pass
-
+        self.optimizer_kwargs = config.optimizer
+        self.scheduler_kwargs = config.scheduler
+        self._train_transforms = train_transforms
+        self._val_transforms = val_transforms
+        self.train_acc = Accuracy(
+            task="multiclass", num_classes=config.dataset.num_classes, average="macro"
+        )
+        self.val_acc = Accuracy(
+            task="multiclass", num_classes=config.dataset.num_classes, average="macro"
+        )
+        
     def forward(self, x):
         """
         Forward pass of the module.
@@ -56,9 +60,8 @@ class ModuleInterface(LightningModule):
             The output tensor.
         """
         functional.reset_net(self)
-        x = torch.stack([x] * self.T, dim=0)
-        x = self.model(x)
-        return x.mean(0)
+        output = self.model(x)
+        return output
 
     def training_step(
         self,
@@ -76,13 +79,16 @@ class ModuleInterface(LightningModule):
             A dictionary containing the loss and training accuracy.
         """
         x, labels = batch
+        x = self._train_transforms(x)
         logits = self(x)
         loss = self.loss_fn(logits, labels)
         preds = logits.argmax(dim=-1)
-        acc = (preds == labels).float().mean()
-        self.log("train_loss", loss, prog_bar=True, on_step=True, on_epoch=True)
-        self.log("train_acc", acc, prog_bar=True, on_step=True, on_epoch=True)
-        return {"loss": loss, "train_acc": acc, "train_loss": loss}
+        self.train_acc(preds, labels)
+
+        metrics = {"loss": loss, "train_acc": self.train_acc}
+        self.log_dict(metrics, prog_bar=True, on_step=True, on_epoch=True)
+
+        return loss
 
     def validation_step(self, batch, batch_idx):
         """
@@ -96,29 +102,56 @@ class ModuleInterface(LightningModule):
             A dictionary containing the validation loss and accuracy.
         """
         img, labels = batch
+        img = self._val_transforms(img)
         logits = self(img)
         loss = self.loss_fn(logits, labels)
         preds = logits.argmax(dim=-1)
-        acc = (preds == labels).float().mean()
-        self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
-        self.log("val_acc", acc, prog_bar=True, on_step=False, on_epoch=True)
+        self.val_acc(preds, labels)
 
-        return {"val_loss": loss, "val_acc": acc}
+        metrics = {"loss": loss, "val_acc": self.val_acc}
+        self.log_dict(metrics, prog_bar=True, on_step=False, on_epoch=True)
+
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        """
+        Test step of the module.
+
+        Args:
+            batch: The input batch.
+            batch_idx: The index of the current batch.
+
+        Returns:
+            A dictionary containing the test loss and accuracy.
+        """
+        img, labels = batch
+        img = self._val_transforms(img)
+        logits = self(img)
+        loss = self.loss_fn(logits, labels)
+        preds = logits.argmax(dim=-1)
+        self.val_acc(preds, labels)
+
+        metrics = {"loss": loss, "val_acc": self.val_acc}
+        self.log_dict(metrics, prog_bar=True, on_step=False, on_epoch=True)
+
+        return loss
 
     def on_validation_epoch_end(self) -> None:
         """
         Callback function called at the end of each validation epoch.
         """
-        print("")
+        print("epoch end")
 
     def configure_optimizers(self):
         optimizer_cls = getattr(optim, self.optimizer_kwargs["name"])
         assert (
             optimizer_cls is not None
         ), f"Optimizer {self.optimizer_kwargs['name']} not found"
+
         optimizer = optimizer_cls(
             self.model.parameters(), **self.optimizer_kwargs["params"]
         )
+
         scheduler_cls = getattr(lr_scheduler, self.scheduler_kwargs["name"])
         assert (
             scheduler_cls is not None

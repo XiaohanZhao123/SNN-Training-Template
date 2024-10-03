@@ -1,33 +1,46 @@
+# Default configurations
 defaults:
- - dataset: cifar10
- - model: sew_fpn
- - optimizer: sgd
- - scheduler: cos
+  - dataset: cifar10
+  - model: sew_resnet
+  - optimizer: sgd
 
+# Learning rate scheduler configuration
+scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: ${trainer.max_epochs}
 
-data:
+# Data loading configuration
+data_loader:
   batch_size: 128
   num_workers: 8
-  has_test: True
-  auto_argu: True
-  cutout: True
 
-trainer:
-   devices: [0]
-   max_epochs: 400
-   precision: '16-mixed'
+# Training configuration
+devices: [1]
+max_epochs: 400
+precision: '16-mixed'
 
+# Logging configuration
 wandb:
   entity: ritianzhaoxx
   run_name: test
 
-T: 4
-p: 4 # parameter for temporal inflation neuron
-replace_activation: False
+# Model-specific configuration
+T: 4  # Number of time steps for SNN
 loss: cross_entropy
-inflation_type: add # can use [binary, conv, add]
 
+# Optimization configuration
+compile: True  # Use torch.compile for acceleration
+to_pytorch: True  # Convert to PyTorch model
 
+# Reproducibility
+seed: 42
 
-compile: False # if use torch.compile for accleration
-to_pytorch: True # if convert to pytorch model
+# Experiment tracking
+use_wandb: True
+
+# Data augmentation
+autoaugment: True
+
+# Debugging
+debug: False  # Control the number of sanity validation steps
