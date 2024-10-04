@@ -18,7 +18,7 @@ from utils.instantiate import get_augmentation, get_model
 
 os.environ["WANDB_MODE"] = "disabled"
 wandb.require("core")
-torch.set_float32_matmul_precision('medium')
+torch.set_float32_matmul_precision("medium")
 
 
 def load_callbacks(cfg: DictConfig):

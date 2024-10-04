@@ -50,7 +50,7 @@ class atan(torch.autograd.Function):
         return _atan_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
-class CostumeLIF(nn.Module):
+class CustomLIF(nn.Module):
     def __init__(
         self,
         tau: float = 2,
@@ -83,10 +83,10 @@ class TemporalLinearWrapper(nn.Module):
         self.step_mode = "m"
 
     def forward(self, x):
-        out = []
-        for i in range(self.step):
-            out += [self.model(x[i])]
-        out = torch.stack(out)
+        T, B, C = x.shape
+        out = x.reshape(-1, C)
+        out = self.model(out)
+        out = out.view(T, B, -1).contiguous()
         return out
 
 

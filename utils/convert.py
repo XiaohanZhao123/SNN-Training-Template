@@ -1,34 +1,26 @@
 import inspect
+from typing import Type, Union
 
 import torch
 from spikingjelly.activation_based import layer, neuron
 from spikingjelly.activation_based.model import sew_resnet
-from spikingjelly.activation_based.neuron import SimpleLIFNode
 from torch import nn
 
-from .util_models import CostumeLIF, TemporalConvWrapper, TemporalLinearWrapper
+from .util_models import CustomLIF, TemporalConvWrapper, TemporalLinearWrapper
 
 
-def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
+def ann_to_snn(module: nn.Module, step: int = 2):
     """
-    Recursively replace the normal conv2d and Linear layer to SpikeLayer in order to accelerate using torch.compile
+    Recursively replace the normal conv2d and Linear layer to SpikeLayer to accelerate using torch.compile
     """
     for name, child_module in module.named_children():
-
         if isinstance(child_module, nn.Sequential):
-            ann_to_snn(child_module, step=step, channel=channel)
-
-        elif isinstance(child_module, (nn.Conv2d, layer.Conv2d)):
-            if isinstance(child_module, layer.Conv2d):
-                child_module = spikingjelly_to_ann(child_module, nn.Conv2d)
-            setattr(module, name, TemporalConvWrapper(child_module, step=step))
-
-        elif isinstance(child_module, (nn.Linear, layer.Linear)):
-            if isinstance(child_module, layer.Linear):
-                child_module = spikingjelly_to_ann(child_module, nn.Linear)
-
-            setattr(module, name, TemporalConvWrapper(child_module, step=step))
-
+            ann_to_snn(child_module, step=step)
+        elif isinstance(
+            child_module, (nn.Conv2d, nn.Linear, layer.Conv2d, layer.Linear)
+        ):
+            new_module = convert_to_temporal_wrapper(child_module, step)
+            setattr(module, name, new_module)
         elif isinstance(
             child_module,
             (
@@ -40,59 +32,84 @@ def ann_to_snn(module: nn.Module, step=2, channel: int = 0):
                 layer.MaxPool2d,
             ),
         ):
-            if isinstance(child_module, layer.AvgPool2d):
-                child_module = spikingjelly_to_ann(child_module, nn.AvgPool2d)
-            if isinstance(child_module, layer.AdaptiveAvgPool2d):
-                child_module = spikingjelly_to_ann(child_module, nn.AdaptiveAvgPool2d)
-            if isinstance(child_module, layer.MaxPool2d):
-                child_module = spikingjelly_to_ann(child_module, nn.MaxPool2d)
-
-            setattr(module, name, TemporalConvWrapper(child_module, step=step))
-
+            new_module = convert_to_temporal_wrapper(child_module, step)
+            setattr(module, name, new_module)
         elif isinstance(
             child_module, (nn.ReLU, nn.ReLU6, neuron.LIFNode, neuron.IFNode)
         ):
-            setattr(module, name, CostumeLIF())
+            setattr(module, name, CustomLIF())
         elif isinstance(child_module, (nn.BatchNorm2d, layer.BatchNorm2d)):
-            if isinstance(child_module, layer.BatchNorm2d):
-                child_module = spikingjelly_to_ann(child_module, nn.BatchNorm2d)
-            setattr(module, name, TemporalConvWrapper(child_module, step=step))
-            channel = child_module.num_features
-
+            new_module = convert_to_temporal_wrapper(child_module, step)
+            setattr(module, name, new_module)
         else:
-            ann_to_snn(child_module, step=step, channel=channel)
+            ann_to_snn(child_module, step=step)
 
 
-def spikingjelly_to_ann(spikingjelly_layer, ann_layer):
+def convert_to_temporal_wrapper(module: nn.Module, step: int) -> TemporalConvWrapper:
     """
-    Creates an instance of `new_layer_class` using the parameters from `custom_layer`.
-
-    Args:
-    - custom_layer (torch.nn.Module): The layer from which to copy parameters.
-    - new_layer_class (class): The class of the new layer to be instantiated.
-
-    Returns:
-    - torch.nn.Module: New layer instance with copied parameters.
+    Convert a module to its temporal wrapper version.
     """
-    # Get the constructor signature of the new layer class
-    signature = inspect.signature(ann_layer.__init__)
-    layer_params = {}
+    if isinstance(
+        module,
+        (
+            layer.Conv2d,
+            layer.Linear,
+            layer.AvgPool2d,
+            layer.AdaptiveAvgPool2d,
+            layer.MaxPool2d,
+            layer.BatchNorm2d,
+        ),
+    ):
+        module = spikingjelly_to_ann(module)
 
-    # Collect parameters that match in the custom_layer
-    for name, param in signature.parameters.items():
-        if name == "self":
-            continue
-        if hasattr(spikingjelly_layer, name):
-            layer_params[name] = getattr(spikingjelly_layer, name)
+    if isinstance(module, nn.Linear):
+        return TemporalLinearWrapper(module, step=step)
+
+    return TemporalConvWrapper(module, step=step)
+
+
+def spikingjelly_to_ann(spikingjelly_layer: nn.Module) -> nn.Module:
+    """
+    Convert a SpikingJelly layer to its PyTorch equivalent.
+    """
+    ann_layer_mapping = {
+        layer.Conv2d: nn.Conv2d,
+        layer.Linear: nn.Linear,
+        layer.AvgPool2d: nn.AvgPool2d,
+        layer.AdaptiveAvgPool2d: nn.AdaptiveAvgPool2d,
+        layer.MaxPool2d: nn.MaxPool2d,
+        layer.BatchNorm2d: nn.BatchNorm2d,
+    }
+
+    ann_layer_class = ann_layer_mapping.get(type(spikingjelly_layer))
+    if not ann_layer_class:
+        raise ValueError(f"Unsupported layer type: {type(spikingjelly_layer)}")
+
+    return create_ann_layer(spikingjelly_layer, ann_layer_class)
+
+
+def create_ann_layer(
+    custom_layer: nn.Module, new_layer_class: Type[nn.Module]
+) -> nn.Module:
+    """
+    Create an instance of `new_layer_class` using the parameters from `custom_layer`.
+    """
+    signature = inspect.signature(new_layer_class.__init__)
+    layer_params = {
+        name: getattr(custom_layer, name)
+        for name, param in signature.parameters.items()
+        if name != "self" and hasattr(custom_layer, name)
+    }
 
     if "bias" in layer_params:
-        layer_params["bias"] = True if layer_params["bias"] is not None else False
+        layer_params["bias"] = layer_params["bias"] is not None
 
-    # Create a new layer instance with the extracted parameters, and copy the weights
-    new_layer = ann_layer(**layer_params)
-    for name, param in spikingjelly_layer.named_parameters():
+    new_layer = new_layer_class(**layer_params)
+
+    # Copy weights
+    for name, param in custom_layer.named_parameters():
         if hasattr(new_layer, name):
-            getattr(new_layer, name).data = param.data.clone()
+            getattr(new_layer, name).data.copy_(param.data)
 
     return new_layer
 

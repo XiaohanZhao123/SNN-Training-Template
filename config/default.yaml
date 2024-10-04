@@ -16,7 +16,7 @@ data_loader:
   num_workers: 8
 
 # Training configuration
-devices: [1]
+devices: [0]
 max_epochs: 400
 precision: '16-mixed'
 
