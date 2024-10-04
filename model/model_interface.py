@@ -147,7 +147,7 @@ class ModuleInterface(LightningModule):
         """
         Callback function called at the end of each validation epoch.
         """
-        print("epoch end")
+        print("epoch end\n")
 
     def configure_optimizers(self):
         optimizer_cls = getattr(optim, self.optimizer_kwargs["name"])

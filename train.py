@@ -41,10 +41,20 @@ def load_callbacks(cfg: DictConfig):
     return callbacks
 
 
+def check_config(cfg: DictConfig):
+    """Check if the configuration is valid for training."""
+    if cfg.compile is True:
+        assert cfg.to_pytorch is True, "to_pytorch must be True if compile is True"
+        assert (
+            cfg.debug is False
+        ), "must set debug to False to fully utilize torch compile"
+
+
 @hydra.main(config_path="config", config_name="default", version_base=None)
 def main(cfg: DictConfig) -> None:
-    config_dict = OmegaConf.to_container(cfg, resolve=True)
     seed_everything(cfg.seed)
+    check_config(cfg)
+    config_dict = OmegaConf.to_container(cfg, resolve=True)
     if cfg.use_wandb:
         logger = WandbLogger(
             config=config_dict,

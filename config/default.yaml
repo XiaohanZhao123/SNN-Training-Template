@@ -30,8 +30,8 @@ T: 4  # Number of time steps for SNN
 loss: cross_entropy
 
 # Optimization configuration
-compile: False  # Use torch.compile for acceleration
-to_pytorch: False  # Convert to PyTorch model
+compile: True  # Use torch.compile for acceleration
+to_pytorch: True  # Convert to PyTorch model
 
 # Reproducibility
 seed: 42

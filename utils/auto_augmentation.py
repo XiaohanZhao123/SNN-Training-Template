@@ -1,3 +1,5 @@
+"""Reproduce of AutoAugment using Kornia, the Kornia version does not work on PytorchLightning"""
+
 import enum
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -108,6 +110,7 @@ class POLICY(enum.Enum):
     """
     Policy for AutoAugment.
     """
+
     IMAGENET = "imagenet"
     CIFAR10 = "cifar10"
     SVHN = "svhn"

@@ -1,3 +1,7 @@
+"""
+Convert SpikingJelly model, or any ANN model to PyTorch Spiking Neural Network model
+"""
+
 import inspect
 from typing import Type, Union
 
